@@ -1,0 +1,187 @@
+yum -y install git python-devel python-ldap python-memcached mod_wsgi glibc-devel gcc gcc-c++ python-zope-interface httpd memcached
+
+
+install python 2.7:
+mkdir /home/atsvetkov/GRAPHITE
+cd /home/atsvetkov/GRAPHITE/
+
+yum -y install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel tk-devel gdbm-devel db4-devel libpcap-devel xz-devel
+
+wget https://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz
+tar -xvzf Python-2.7.10.tgz
+cd ./Python-2.7.10
+./configure --enable-shared --with-threads
+make -j10
+make altinstall
+
+	#python2.7: error while loading shared libraries: libpython2.7.so.1.0: cannot open shared object file: No such file or directory
+	ln -s /usr/local/lib/libpython2.7.so.1.0 /usr/lib/
+	ln -s /usr/local/lib/libpython2.7.so /usr/
+	ldconfig
+
+
+
+install pip:
+cd /home/atsvetkov/GRAPHITE/
+wget https://bootstrap.pypa.io/get-pip.py
+/usr/local/bin/python2.7 get-pip.py
+
+
+Install Carbon:
+cd /home/atsvetkov/GRAPHITE/
+pip2.7 install twisted
+git clone https://github.com/graphite-project/carbon.git
+cd ./carbon/
+python2.7 setup.py install
+
+
+Install Whisper:
+cd /home/atsvetkov/GRAPHITE/
+git clone https://github.com/graphite-project/whisper.git
+cd ./whisper/
+python2.7 setup.py install
+
+
+Start a Carbon Process:
+cd /opt/graphite/conf
+cp aggregation-rules.conf.example aggregation-rules.conf
+cp blacklist.conf.example blacklist.conf
+cp carbon.conf.example carbon.conf
+cp carbon.amqp.conf.example carbon.amqp.conf
+cp relay-rules.conf.example relay-rules.conf
+cp rewrite-rules.conf.example rewrite-rules.conf
+cp storage-schemas.conf.example storage-schemas.conf
+cp storage-aggregation.conf.example storage-aggregation.conf
+cp whitelist.conf.example whitelist.conf
+
+		Check /opt/graphite/conf/carbon.conf:
+		[cache]
+		LINE_RECEIVER_INTERFACE = 0.0.0.0
+		LINE_RECEIVER_PORT = 2003
+
+cd /opt/graphite/bin
+./carbon-cache.py start
+
+		Check:
+		ps -elF | grep carbon-cache | grep -v grep
+		netstat -plantu | grep 2003
+		netstat -plantu | grep 7002
+		
+
+
+WSGI python2.7:
+yum install httpd -y
+yum install httpd-devel.x86_64 -y
+cd /home/atsvetkov/GRAPHITE/	
+https://github.com/GrahamDumpleton/mod_wsgi/archive/3.5.tar.gz
+tar -xvzf 3.5.tar.gz
+cd mod_wsgi-3.5
+./configure  --with-python=/usr/local/bin/python2.7
+make
+make install
+chmod 755 /usr/lib64/httpd/modules/mod_wsgi.so
+
+
+
+python-rrdtool:
+cd /home/atsvetkov/GRAPHITE/
+wget http://oss.oetiker.ch/rrdtool/pub/rrdtool-1.5.4.tar.gz
+tar -xvzf rrdtool-1.5.4.tar.gz
+cd ./rrdtool-1.5.4
+./configure --prefix=/usr/local
+make
+make install
+ln -s /usr/local/lib/librrd* /usr/lib
+ldconfig
+pip2.7 install python-rrdtool
+pip2.7 install rrdtool
+
+
+
+The Graphite Webapp:
+cd /home/atsvetkov/GRAPHITE/
+git clone https://github.com/graphite-project/graphite-web.git
+cd ./graphite-web/
+
+	Check:
+	python2.7 check-dependencies.py
+	[REQUIRED] Unable to import the 'cairo' module, do you have pycairo installed for python 2.7.10?
+	[REQUIRED] Unable to import the 'django' module, do you have Django installed for python 2.7.10?
+	[REQUIRED] Unable to import the 'pytz' module, do you have pytz module installed for python 2.7.10?
+	[REQUIRED] Unable to import the 'pyparsing' module, do you have pyparsing module installed for python 2.7.10?
+	[REQUIRED] Unable to import the 'tagging' module, do you have django-tagging installed for python 2.7.10?
+	[FATAL] Unable to import the 'pytz' module, do you have pytz installed for python 2.7.10?
+
+yum install cairo-devel -y
+yum install pycairo-devel -y
+yum install libffi-devel.x86_64 -y
+yum install bitmap bitmap-fonts -y
+yum install openldap-devel -y
+yum install glib2.x86_64 -y
+yum install glib2-devel.x86_64 -y
+yum install libxml2.x86_64 libxml2-devel.x86_64 -y
+yum install pango-1.28.1-7.el6_3.x86_64 -y
+yum install pango-devel -y
+
+pip2.7 install django
+pip2.7 install pyparsing
+pip2.7 install django-tagging
+pip2.7 install python-memcached
+pip2.7 install txamqp
+pip2.7 install pytz
+pip2.7 install cairocffi
+pip2.7 install python-ldap
+pip2.7 install whitenoise
+	Check:
+	python2.7 check-dependencies.py
+	
+
+
+install graphite web app:
+cd /home/atsvetkov/GRAPHITE/graphite-web/
+python2.7 setup.py install
+
+
+Initialize the Database:
+cd /opt/graphite
+export PYTHONPATH=$PYTHONPATH:`pwd`/webapp
+django-admin.py syncdb --settings=graphite.settings
+	Check:
+	ls -l /opt/graphite/storage/graphite.db
+
+
+Graphite Webapp Settings:
+cd /opt/graphite/webapp/graphite
+cp local_settings.py.example local_settings.py
+	Edit:
+	/opt/graphite/webapp/graphite/local_settings.py
+	/opt/graphite/conf/carbon.conf
+
+	Check:
+	ps -elF | grep carbon-cache | grep -v grep
+	netstat -plantu | grep 2003
+	netstat -plantu | grep 7002
+
+
+Dashboard and Graph Template Configuration:
+cd /opt/graphite/conf
+cp dashboard.conf.example dashboard.conf
+cp graphTemplates.conf.example graphTemplates.conf
+
+	Edit:
+	/opt/graphite/conf/dashboard.conf
+	/opt/graphite/conf/graphTemplates.conf
+
+
+
+Run the Web Application:
+
+Change SECRET_KEY in /opt/graphite/webapp/graphite/settings.py
+cp /opt/graphite/conf/graphite.wsgi.example /opt/graphite/conf/graphite.wsgi
+create: /etc/httpd/conf.d/graphite.conf
+chown -R apache:apache /opt/graphite/
+/etc/init.d/httpd restart
+
+	Check:
+	tail -f /opt/graphite/storage/log/webapp/error.log
+	curl us0101acmo002
